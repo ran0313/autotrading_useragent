@@ -317,24 +317,31 @@ class AgentExchangeClient:
             rounded_price = self.round_price(symbol, price)
             ccxt_symbol = self._to_ccxt_symbol(symbol)
             if self.exchange_id == "bitget":
-                # 단방향 모드: 신규 인스턴스로 holdSide 오판 방지
-                ex = self._new_exchange()
-                try:
-                    await ex.load_markets()
-                    order = await ex.create_order(
-                        ccxt_symbol, "limit", side.lower(), float(rounded_qty), float(rounded_price),
-                        {"reduceOnly": True, "timeInForce": "GTC"}
-                    )
-                finally:
-                    await ex.close()
+                import time
+                resp = await self.exchange.private_mix_post_v2_mix_order_place_tpsl_order({
+                    "symbol": symbol,
+                    "productType": "USDT-FUTURES",
+                    "marginMode": "crossed",
+                    "marginCoin": "USDT",
+                    "planType": "profit_plan",
+                    "triggerPrice": str(rounded_price),
+                    "triggerType": "fill_price",
+                    "executePrice": str(rounded_price),
+                    "size": str(rounded_qty),
+                    "side": side.lower(),
+                    "delegateType": "limit",
+                })
+                order_id = resp.get("data", {}).get("orderId", f"bitget_tp_{int(time.time())}")
+                logger.info(f"TP plan order placed: {side} {rounded_qty} {symbol} @ {rounded_price} (ID: {order_id})")
+                return order_id
             else:
                 order = await self.exchange.create_order(
                     ccxt_symbol, "limit", side.lower(), float(rounded_qty), float(rounded_price),
                     {"reduceOnly": True, "timeInForce": "GTC"}
                 )
-            order_id = order["id"]
-            logger.info(f"TP order placed: {side} {rounded_qty} {symbol} @ {rounded_price} (ID: {order_id})")
-            return order_id
+                order_id = order["id"]
+                logger.info(f"TP order placed: {side} {rounded_qty} {symbol} @ {rounded_price} (ID: {order_id})")
+                return order_id
         except Exception as e:
             logger.error(f"Failed to place TP order: {e}")
             raise ExchangeError(f"place_tp_order failed for {symbol}: {e}")
