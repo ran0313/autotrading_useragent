@@ -25,10 +25,23 @@ from config import settings
 from exchange_client import AgentExchangeClient, ExchangeError
 
 # ===== 로깅 설정 =====
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s"
-)
+class _ColorFormatter(logging.Formatter):
+    _BLUE = "\033[34m"
+    _RED  = "\033[31m"
+    _RESET = "\033[0m"
+    _FMT = "%(asctime)s [%(name)s] %(levelname)s: %(message)s"
+
+    def format(self, record: logging.LogRecord) -> str:
+        msg = super().format(record)
+        if record.levelno >= logging.ERROR:
+            return f"{self._RED}{msg}{self._RESET}"
+        if record.levelno == logging.INFO:
+            return f"{self._BLUE}{msg}{self._RESET}"
+        return msg
+
+_handler = logging.StreamHandler()
+_handler.setFormatter(_ColorFormatter("%(asctime)s [%(name)s] %(levelname)s: %(message)s"))
+logging.basicConfig(level=logging.INFO, handlers=[_handler])
 logger = logging.getLogger("agent")
 
 # ===== 거래소 클라이언트 싱글톤 =====
